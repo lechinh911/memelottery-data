@@ -2,7 +2,10 @@
 
 ## Mục tiêu
 
-Tăng **winrate** và **chất lượng lệnh** qua vòng lặp: nghiên cứu → backtest → chỉnh filter → lặp lại.
+Tăng chất lượng hệ thống qua vòng lặp nghiên cứu → backtest → chỉnh filter.
+
+**Bài học:** tối đa winrate (Quality) làm ít lệnh, đợi lâu, lãi thực thấp.  
+Default chuyển sang **Active** (nhiều lệnh hơn, vẫn expectancy dương). **Core** cho lãi full-sample tốt nhất.
 
 ## Universe backtest
 

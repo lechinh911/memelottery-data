@@ -1,31 +1,30 @@
-# 2 Đáy / 2 Đỉnh → Gãy → EMA Momentum
+# 2 Day / 2 Dinh -> Gay -> EMA Momentum
 
-Nghiên cứu và tối ưu chỉ báo TradingView (Pine v6) phát hiện cụm nến 2 đáy/2 đỉnh, chờ gãy neckline, rồi xác nhận momentum EMA20/50.
+Nghien cuu / toi uu chi bao TradingView (Pine v6): cum nen 2 day/2 dinh, gay neckline, xac nhan EMA20/50.
 
-## Kết quả chính (v3 champion)
+## Ket luan quan trong
 
-Walk-forward OOS trên BTC / ETH / Gold / EURUSD **1h**:
+**Winrate cao != lai nhieu.** Preset Quality (~67% WR) qua khat -> it lenh, doi lau, full-sample lai thap.  
+**Default moi: Active** — nhieu lenh hon, van expectancy duong.
 
-| Metric | v1 | v2 strict | **v3 Quality** |
-|--------|----|-----------|----------------|
-| Winrate | ~58%* | 58% | **67%** |
-| Profit factor | ~1.6* | 1.45 | **1.81** |
-| Expectancy (R) | ~0.22* | 0.18 | **0.25** |
-| Markets PF≥1 | 3/3* | 4/4 | **4/4** |
+| Preset | ~Lenh/thang/market (1h) | OOS WR | Full-sample net | Khi nao dung |
+|--------|-------------------------|--------|-----------------|--------------|
+| **Active (default)** | ~3.3 | ~55% | ~+7% | Can bang tan suat / edge |
+| Core | ~2.2 | ~60% | **~+19%** | Toi da lai, chap nhan it lenh hon Active |
+| Freq | ~3.7 | ~55% | ~+5% | Muon nhieu tin hieu nhat con edge |
+| Quality | ~1.9 | ~67% | ~+3% | Chi trade setup dep, khong ngai doi |
 
-\* v1 bị thổi bởi Gold mẫu OOS nhỏ.
+Neu noi long hon Freq (pivot 3, filter yeu): so lenh tang nhung **mat edge** (nhat EURUSD).
 
-Chi tiết: [`research/FINDINGS.md`](research/FINDINGS.md) · params: [`results/best_params.json`](results/best_params.json)
+## Dung tren TradingView
 
-## Dùng trên TradingView
+1. Copy file raw: [`COPY_PASTE_TV.pine`](https://github.com/lechinh911/memelottery-data/blob/cursor/double-pattern-momentum-rd-259e/COPY_PASTE_TV.pine) (bam **Raw** -> Ctrl+A -> Ctrl+C)
+2. Pine Editor -> paste -> Save -> Add to chart
+3. Chon preset **Active (khuyen nghi)** (hoac Core neu uu tien lai)
 
-1. Mở [`pine/v2_strategy.pine`](pine/v2_strategy.pine)
-2. Paste vào Pine Editor → Add to chart
-3. Giữ preset **Quality v3 (khuyến nghị)**
-4. Chạy Strategy Tester trên khung **1h** (đã tối ưu chủ yếu ở TF này)
-5. Bản gốc (chỉ báo): [`pine/v1_original.pine`](pine/v1_original.pine)
+Khuyen nghi: BTC/ETH/Gold 1h. EURUSD thuong keo net xuong — co the tat SHORT/LONG tuy thi truong.
 
-## Chạy lại backtest Python
+## Chay lai backtest
 
 ```bash
 pip install -r requirements.txt
@@ -33,9 +32,4 @@ python -u src/run_research.py
 python -u src/hillclimb.py
 ```
 
-## Cải tiến then chốt của v3
-
-1. **ATR stop cap (3×ATR)** — stop mô hình trên 1h thường rộng 6–7 ATR, làm WR thấp
-2. **RSI mềm** — lọc long khi RSI quá cao / short khi RSI quá thấp
-3. **Volume + HTF EMA + quality score + ADX/spread chặt**
-4. **BE sau 1R + trail** — giữ lệnh thắng, cắt lỗ giả sớm hơn
+Chi tiet: [`research/FINDINGS.md`](research/FINDINGS.md)

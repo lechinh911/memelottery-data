@@ -1,23 +1,21 @@
 //@version=6
-// 2 Đáy/2 Đỉnh v3 - research build (hillclimb winrate)
-// Thay đổi chính vs v1 (backtest Python BTC/ETH/XAU/EURUSD 1h, walk-forward):
-// 1) Strategy thật: SL mô hình (có ATR cap), TP theo R, BE sau 1R, trail
-// 2) Volume lúc gãy + HTF EMA bias + RSI mềm
-// 3) Pattern quality score
-// 4) Preset "Quality v3" - OOS WR ~67%, PF ~1.8, 4/4 thị trường dương
-// 5) oppCancel + cancelRetest + cooldown
-strategy("2 Đáy/2 Đỉnh v3 -> Gãy -> EMA Momentum", overlay=true,
+// 2 Day/2 Dinh v4 - balance frequency + expectancy
+// Active (default): ~3.3 trades/mo, still profitable
+// Core: ~2.2 trades/mo, best full-sample net
+// Freq: ~3.7 trades/mo, thinnest edge that still works
+// Quality: ~1.9 trades/mo, high WR but waits long / lower net
+strategy("2 Day/2 Dinh v4 -> Break -> EMA Momentum", overlay=true,
      max_boxes_count=200, max_labels_count=300, max_lines_count=100, max_bars_back=500,
      initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=5,
      commission_type=strategy.commission.percent, commission_value=0.04,
      pyramiding=0, process_orders_on_close=true)
 
 // ===================== PRESET =====================
-grpPreset = "0) Preset nghiên cứu"
-preset = input.string("Quality v3 (khuyến nghị)", "Preset",
-     options=["Quality v3 (khuyến nghị)", "Strict", "Core", "Aggressive", "Custom (dùng input bên dưới)"],
+grpPreset = "0) Preset"
+preset = input.string("Active (khuyen nghi)", "Preset",
+     options=["Active (khuyen nghi)", "Core (lai tot nhat)", "Freq (nhieu lenh)", "Quality (WR cao, it lenh)", "Custom"],
      group=grpPreset,
-     tooltip="Quality v3: hillclimb winrate (OOS ~67% WR trên 4 thị trường 1h). Strict: lọc chặt. Core: nhiều lệnh hơn. Custom: chỉnh tay.")
+     tooltip="Active ~3.3 lenh/thang. Core ~2.2 lenh, lai day du tot nhat. Quality ~1.9 lenh, WR cao nhung doi lau. Freq ~3.7 lenh.")
 
 // ===================== INPUTS =====================
 grpEma     = "EMA"
@@ -90,32 +88,32 @@ showLabels = input.bool(true, "Hiện nhãn", group=grpVis)
 showTable  = input.bool(true, "Bảng trạng thái", group=grpVis)
 
 // ---- Resolve preset ----
-isQ3     = preset == "Quality v3 (khuyến nghị)"
-isStrict = preset == "Strict"
-isCore   = preset == "Core"
-isAgg    = preset == "Aggressive"
+isActive  = preset == "Active (khuyen nghi)"
+isCore    = preset == "Core (lai tot nhat)"
+isFreq    = preset == "Freq (nhieu lenh)"
+isQuality = preset == "Quality (WR cao, it lenh)"
 
-minRetrace   = isQ3 ? 0.60 : isStrict ? 0.60 : isCore ? 0.55 : isAgg ? 0.45 : minRetraceIn
-minHeightAtr = isQ3 ? 1.75 : isStrict ? 1.80 : isCore ? 1.60 : isAgg ? 1.20 : minHeightIn
-breakBuf     = isQ3 ? 0.22 : isStrict ? 0.25 : isCore ? 0.15 : isAgg ? 0.10 : breakBufIn
-cancelRetest = isQ3 ? true : isStrict ? true : isCore ? false : isAgg ? false : cancelRetestIn
-useVolume    = isQ3 ? true : isStrict ? true : isCore ? true : isAgg ? true : useVolumeIn
-volMult      = isQ3 ? 1.15 : isStrict ? 1.20 : isCore ? 1.15 : isAgg ? 1.10 : volMultIn
-spreadAtr    = isQ3 ? 0.35 : isStrict ? 0.35 : isCore ? 0.30 : isAgg ? 0.20 : spreadAtrIn
-minScore     = isQ3 ? 3 : isStrict ? 3 : isCore ? 2 : isAgg ? 2 : minScoreIn
-adxMin       = isQ3 ? 22.0 : isStrict ? 22.0 : isCore ? 20.0 : isAgg ? 18.0 : adxMinIn
-useHtf       = isQ3 ? true : isStrict ? true : isCore ? true : isAgg ? true : useHtfIn
-rrTarget     = isQ3 ? 1.5 : isStrict ? 1.5 : isCore ? 1.5 : isAgg ? 2.0 : rrTargetIn
-useTrail     = isQ3 ? true : isStrict ? true : isCore ? true : isAgg ? true : useTrailIn
-trailAtrMul  = isQ3 ? 1.25 : isStrict ? 1.3 : isCore ? 1.3 : isAgg ? 1.2 : trailAtrIn
-cooldown     = isQ3 ? 8 : isStrict ? 10 : isCore ? 8 : isAgg ? 5 : cooldownIn
-oppCancel    = isQ3 ? true : isStrict ? true : isCore ? true : isAgg ? true : oppCancelIn
-minQuality   = isQ3 ? 0.48 : isStrict ? 0.50 : isCore ? 0.40 : isAgg ? 0.35 : minQualityIn
-useRsi       = isQ3 ? true : isStrict ? false : isCore ? false : isAgg ? true : useRsiIn
-rsiLongMax   = isQ3 ? 72.0 : isAgg ? 70.0 : rsiLongMaxIn
-rsiShortMin  = isQ3 ? 28.0 : isAgg ? 30.0 : rsiShortMinIn
-atrStopCap   = isQ3 ? 3.0 : isStrict ? 0.0 : isCore ? 2.5 : isAgg ? 3.0 : atrStopCapIn
-tp1Be        = isQ3 ? true : isStrict ? false : isCore ? true : isAgg ? true : tp1BeIn
+minRetrace   = isActive ? 0.55 : isCore ? 0.55 : isFreq ? 0.52 : isQuality ? 0.60 : minRetraceIn
+minHeightAtr = isActive ? 1.60 : isCore ? 1.60 : isFreq ? 1.50 : isQuality ? 1.75 : minHeightIn
+breakBuf     = isActive ? 0.15 : isCore ? 0.15 : isFreq ? 0.12 : isQuality ? 0.22 : breakBufIn
+cancelRetest = isActive ? false : isCore ? false : isFreq ? false : isQuality ? true : cancelRetestIn
+useVolume    = isActive ? true : isCore ? true : isFreq ? true : isQuality ? true : useVolumeIn
+volMult      = isActive ? 1.15 : isCore ? 1.15 : isFreq ? 1.10 : isQuality ? 1.15 : volMultIn
+spreadAtr    = isActive ? 0.30 : isCore ? 0.30 : isFreq ? 0.28 : isQuality ? 0.35 : spreadAtrIn
+minScore     = isActive ? 2 : isCore ? 2 : isFreq ? 2 : isQuality ? 3 : minScoreIn
+adxMin       = isActive ? 20.0 : isCore ? 20.0 : isFreq ? 18.0 : isQuality ? 22.0 : adxMinIn
+useHtf       = isActive ? true : isCore ? true : isFreq ? true : isQuality ? true : useHtfIn
+rrTarget     = isActive ? 1.5 : isCore ? 1.5 : isFreq ? 1.5 : isQuality ? 1.5 : rrTargetIn
+useTrail     = isActive ? true : isCore ? true : isFreq ? true : isQuality ? true : useTrailIn
+trailAtrMul  = isActive ? 1.30 : isCore ? 1.30 : isFreq ? 1.30 : isQuality ? 1.25 : trailAtrIn
+cooldown     = isActive ? 5 : isCore ? 8 : isFreq ? 5 : isQuality ? 8 : cooldownIn
+oppCancel    = isActive ? true : isCore ? true : isFreq ? true : isQuality ? true : oppCancelIn
+minQuality   = isActive ? 0.40 : isCore ? 0.40 : isFreq ? 0.38 : isQuality ? 0.48 : minQualityIn
+useRsi       = isActive ? false : isCore ? false : isFreq ? false : isQuality ? true : useRsiIn
+rsiLongMax   = isQuality ? 72.0 : rsiLongMaxIn
+rsiShortMin  = isQuality ? 28.0 : rsiShortMinIn
+atrStopCap   = isActive ? 3.0 : isCore ? 0.0 : isFreq ? 3.0 : isQuality ? 3.0 : atrStopCapIn
+tp1Be        = isActive ? true : isCore ? false : isFreq ? true : isQuality ? true : tp1BeIn
 
 // ===================== INDICATORS =====================
 emaF    = ta.ema(close, emaFastLen)
