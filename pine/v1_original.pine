@@ -1,0 +1,370 @@
+//@version=6
+indicator("2 Đáy/2 Đỉnh (cụm nến) → Gãy → EMA20/50 Momentum = Vị thế", overlay=true, max_boxes_count=200, max_labels_count=300, max_lines_count=100, max_bars_back=500)
+
+// ===================== INPUTS =====================
+grpEma     = "EMA"
+emaFastLen = input.int(20, "EMA nhanh", minval=1, group=grpEma)
+emaSlowLen = input.int(50, "EMA chậm", minval=1, group=grpEma)
+
+grpSw      = "Swing (đỉnh/đáy)"
+pivLeft    = input.int(5, "Pivot trái (nến)", minval=1, group=grpSw)
+pivRight   = input.int(5, "Pivot phải (nến)", minval=1, group=grpSw)
+atrLen     = input.int(14, "ATR length", minval=1, group=grpSw)
+
+grpCl      = "Cụm nến tạo đỉnh/đáy"
+clusterAtr = input.float(0.5, "Độ rộng cụm (x ATR quanh đỉnh/đáy)", minval=0.05, step=0.05, group=grpCl)
+minCluster = input.int(3, "Số nến tối thiểu trong cụm", minval=1, group=grpCl)
+spikeAtr   = input.float(1.0, "Đỉnh/đáy nhọn (spike) vẫn hợp lệ nếu nhô khỏi nến lân cận ≥ N x ATR (0 = tắt)", minval=0.0, step=0.1, group=grpCl, tooltip="Ô viền cam = swing dạng spike (ít hơn số nến tối thiểu nhưng nhô ra rõ).")
+
+grpDbl       = "2 đỉnh / 2 đáy"
+minRetrace   = input.float(0.5, "Đỉnh/đáy thứ 2 phải hồi ít nhất X của nhịp cụm 1 (0.5 = 50%)", minval=0.1, maxval=1.0, step=0.05, group=grpDbl, tooltip="Đỉnh 2 phải leo lại ít nhất X% quãng từ neckline lên đỉnh 1 (đáy 2 phải xuống lại ít nhất X% quãng từ neckline xuống đáy 1). Đỉnh 2 thấp hơn đỉnh 1 vẫn hợp lệ nếu đủ mức hồi này. Tăng lên 0.7-0.8 nếu muốn 2 đỉnh/2 đáy phải sát nhau hơn.")
+tolAtr       = input.float(0.75, "Đỉnh 2 được vượt đỉnh 1 / đáy 2 được thủng đáy 1 tối đa (x ATR)", minval=0.0, step=0.05, group=grpDbl)
+minHeightAtr = input.float(1.5, "Chiều cao nhịp hồi giữa 2 cụm tối thiểu (x ATR)", minval=0.0, step=0.1, group=grpDbl)
+minBars      = input.int(5, "Số nến tối thiểu giữa 2 cụm", minval=1, group=grpDbl)
+maxGap       = input.int(100, "Số nến tối đa giữa 2 cụm", minval=5, group=grpDbl)
+maxBars      = input.int(50, "Chờ gãy tối đa (nến kể từ khi có mô hình)", minval=1, group=grpDbl)
+oppCancel    = input.bool(false, "Mô hình ngược chiều mới xuất hiện sẽ hủy setup đang chờ", group=grpDbl)
+
+grpBrk       = "Gãy neckline"
+breakBuf     = input.float(0.2, "Nến gãy phải đóng cửa vượt neckline ≥ N x ATR", minval=0.0, step=0.05, group=grpBrk, tooltip="Lọc các cú gãy lấn nhẹ rồi quay đầu.")
+cancelRetest = input.bool(true, "Hủy setup nếu giá đóng cửa quay lại sau neckline (gãy giả)", group=grpBrk)
+crossWin     = input.int(0, "Chờ tín hiệu tối đa N nến sau khi gãy (0 = không giới hạn)", minval=0, group=grpBrk)
+
+grpMom       = "Momentum / EMA"
+needCross    = input.bool(false, "Bắt buộc EMA phải cắt MỚI sau khi gãy", group=grpMom, tooltip="Tắt: nếu lúc gãy EMA đã sẵn đúng chiều thì vào lệnh ngay khi đủ momentum (phù hợp xu hướng đang chạy). Bật: chỉ vào lệnh sau một lần EMA cắt mới nằm sau nến gãy.")
+confirmWin   = input.int(0, "Khi bật cắt mới: chờ momentum tối đa N nến sau khi EMA cắt (0 = không giới hạn)", minval=0, group=grpMom)
+spreadAtr    = input.float(0.3, "BẮT BUỘC: khoảng cách EMA20-EMA50 tối thiểu (x ATR)", minval=0.0, step=0.05, group=grpMom, tooltip="Điều kiện bắt buộc để loại sideway, vì EMA quấn nhau thì khoảng cách gần bằng 0.")
+slopeLen     = input.int(3, "Slope EMA nhanh: đo trên N nến", minval=1, group=grpMom)
+slopeAtr     = input.float(0.25, "Slope EMA nhanh tối thiểu (x ATR trên N nến)", minval=0.0, step=0.05, group=grpMom)
+minScore     = input.int(2, "Số điều kiện phụ cần đạt (tối đa 3)", minval=1, maxval=3, group=grpMom, tooltip="3 điều kiện phụ: (1) EMA nhanh dốc đủ, (2) khoảng cách 2 EMA đang mở rộng, (3) giá đóng cửa nằm ngoài cả 2 EMA.")
+adxLen       = input.int(14, "ADX length", minval=1, group=grpMom)
+adxMin       = input.float(20.0, "ADX tối thiểu (0 = tắt)", minval=0.0, step=1.0, group=grpMom)
+
+grpVis     = "Hiển thị"
+showBoxes  = input.bool(true, "Vẽ vùng cụm nến", group=grpVis)
+showLines  = input.bool(true, "Nối 2 đáy / 2 đỉnh", group=grpVis)
+showLabels = input.bool(true, "Hiện nhãn 2 Đáy / 2 Đỉnh / Gãy", group=grpVis)
+
+// ===================== INDICATORS =====================
+emaF    = ta.ema(close, emaFastLen)
+emaS    = ta.ema(close, emaSlowLen)
+atr     = ta.atr(atrLen)
+crossUp = ta.crossover(emaF, emaS)
+crossDn = ta.crossunder(emaF, emaS)
+[diP, diM, adxV] = ta.dmi(adxLen, adxLen)
+
+var int lastUpIdx = na
+var int lastDnIdx = na
+if crossUp
+    lastUpIdx := bar_index
+if crossDn
+    lastDnIdx := bar_index
+
+// ---- Momentum ----
+spread  = emaF - emaS
+slopeF  = (emaF - emaF[slopeLen]) / atr
+
+spreadOkUp = spread >= spreadAtr * atr
+spreadOkDn = -spread >= spreadAtr * atr
+
+scoreUp = (slopeF >= slopeAtr ? 1 : 0) + (spread > spread[1] ? 1 : 0) + (close > math.max(emaF, emaS) ? 1 : 0)
+scoreDn = (slopeF <= -slopeAtr ? 1 : 0) + (spread < spread[1] ? 1 : 0) + (close < math.min(emaF, emaS) ? 1 : 0)
+adxOk   = adxMin <= 0 or adxV >= adxMin
+
+// ===================== STATE =====================
+var array<int>   lowIdx  = array.new<int>()
+var array<float> lowPx   = array.new<float>()
+var array<float> lowTop  = array.new<float>()
+var array<int>   highIdx = array.new<int>()
+var array<float> highPx  = array.new<float>()
+var array<float> highBot = array.new<float>()
+
+// Setup 2 đáy (LONG)
+var bool  bullArmed    = false
+var bool  bullBroken   = false
+var float bullLevel    = na
+var float bullSL       = na
+var int   bullExp      = na
+var int   bullBreakIdx = na
+// Setup 2 đỉnh (SHORT)
+var bool  bearArmed    = false
+var bool  bearBroken   = false
+var float bearLevel    = na
+var float bearSL       = na
+var int   bearExp      = na
+var int   bearBreakIdx = na
+
+// ===================== PIVOTS =====================
+ph = ta.pivothigh(high, pivLeft, pivRight)
+pl = ta.pivotlow(low, pivLeft, pivRight)
+
+// ---- Cụm ĐỈNH ----
+bool  validH = false
+float hBot   = na
+int   hIdx   = na
+if not na(ph)
+    tolP = atr[pivRight] * clusterAtr
+    cnt  = 1
+    zBot = ph
+    li   = 0
+    ri   = 0
+    for i = 1 to pivLeft
+        o = pivRight + i
+        if high[o] >= ph - tolP
+            cnt  := cnt + 1
+            zBot := math.min(zBot, high[o])
+            li   := li + 1
+        else
+            break
+    for i = 1 to pivRight
+        o = pivRight - i
+        if high[o] >= ph - tolP
+            cnt  := cnt + 1
+            zBot := math.min(zBot, high[o])
+            ri   := ri + 1
+        else
+            break
+    float nbMax = na
+    for i = 1 to pivLeft
+        v = high[pivRight + i]
+        nbMax := na(nbMax) ? v : math.max(nbMax, v)
+    for i = 1 to pivRight
+        v = high[pivRight - i]
+        nbMax := na(nbMax) ? v : math.max(nbMax, v)
+    isSpike = spikeAtr > 0 and (ph - nbMax) >= spikeAtr * atr[pivRight]
+    hIdx   := bar_index - pivRight
+    hBot   := zBot
+    validH := cnt >= minCluster or isSpike
+    if validH and showBoxes
+        spk = cnt < minCluster
+        box.new(hIdx - li, ph, hIdx + ri, zBot, border_color=spk ? color.new(color.orange, 10) : color.new(color.red, 30), bgcolor=color.new(color.red, 85))
+
+// ---- Cụm ĐÁY ----
+bool  validL = false
+float lTop   = na
+int   lIdx   = na
+if not na(pl)
+    tolP = atr[pivRight] * clusterAtr
+    cnt  = 1
+    zTop = pl
+    li   = 0
+    ri   = 0
+    for i = 1 to pivLeft
+        o = pivRight + i
+        if low[o] <= pl + tolP
+            cnt  := cnt + 1
+            zTop := math.max(zTop, low[o])
+            li   := li + 1
+        else
+            break
+    for i = 1 to pivRight
+        o = pivRight - i
+        if low[o] <= pl + tolP
+            cnt  := cnt + 1
+            zTop := math.max(zTop, low[o])
+            ri   := ri + 1
+        else
+            break
+    float nbMin = na
+    for i = 1 to pivLeft
+        v = low[pivRight + i]
+        nbMin := na(nbMin) ? v : math.min(nbMin, v)
+    for i = 1 to pivRight
+        v = low[pivRight - i]
+        nbMin := na(nbMin) ? v : math.min(nbMin, v)
+    isSpike = spikeAtr > 0 and (nbMin - pl) >= spikeAtr * atr[pivRight]
+    lIdx   := bar_index - pivRight
+    lTop   := zTop
+    validL := cnt >= minCluster or isSpike
+    if validL and showBoxes
+        spk = cnt < minCluster
+        box.new(lIdx - li, zTop, lIdx + ri, pl, border_color=spk ? color.new(color.orange, 10) : color.new(color.green, 30), bgcolor=color.new(color.green, 85))
+
+// ---- Phát hiện 2 ĐÁY ----
+if validL
+    float tolV = atr[pivRight] * tolAtr
+    float minH = atr[pivRight] * minHeightAtr
+    int n = array.size(lowIdx)
+    if n > 0
+        for j = n - 1 to 0
+            i1 = array.get(lowIdx, j)
+            p1 = array.get(lowPx, j)
+            t1 = array.get(lowTop, j)
+            gapBars = lIdx - i1
+            if gapBars > maxGap
+                break
+            // đáy 2 không được thủng đáy 1 quá dung sai
+            if gapBars >= minBars and pl >= p1 - tolV
+                float hh = na
+                float ll = na
+                for k = (bar_index - lIdx) to (bar_index - i1)
+                    hh := na(hh) ? high[k] : math.max(hh, high[k])
+                    ll := na(ll) ? low[k] : math.min(ll, low[k])
+                // đáy 2 phải xuống lại ít nhất minRetrace của nhịp từ đáy 1 lên neckline
+                retraceOk = pl <= hh - minRetrace * (hh - p1)
+                if retraceOk and (hh - math.max(lTop, t1) >= minH) and (ll >= math.min(pl, p1) - tolV)
+                    // không ghi đè setup LONG đã gãy và đang chờ tín hiệu
+                    if not (bullArmed and bullBroken)
+                        bullArmed    := true
+                        bullBroken   := false
+                        bullBreakIdx := na
+                        bullLevel    := hh
+                        bullSL       := math.min(pl, p1)
+                        bullExp      := bar_index + maxBars
+                        if oppCancel
+                            bearArmed  := false
+                            bearBroken := false
+                        if showLabels
+                            label.new(lIdx, pl, "2 Đáy", style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=size.small)
+                        if showLines
+                            line.new(i1, p1, lIdx, pl, color=color.green, style=line.style_dashed)
+                        // Quét lại các nến nằm trong khoảng chờ xác nhận pivot để tìm đúng nến gãy
+                        for k2 = pivRight - 1 to 0
+                            if bullArmed
+                                if close[k2] < bullSL
+                                    bullArmed  := false
+                                    bullBroken := false
+                                else if not bullBroken and close[k2] > bullLevel + breakBuf * atr
+                                    bullBroken   := true
+                                    bullBreakIdx := bar_index - k2
+                                    if showLabels
+                                        label.new(bar_index - k2, high[k2], "Gãy KC", style=label.style_label_down, color=color.new(color.teal, 10), textcolor=color.white, size=size.tiny)
+                    break
+    array.push(lowIdx, lIdx)
+    array.push(lowPx, pl)
+    array.push(lowTop, lTop)
+    if array.size(lowIdx) > 20
+        array.shift(lowIdx)
+        array.shift(lowPx)
+        array.shift(lowTop)
+
+// ---- Phát hiện 2 ĐỈNH ----
+if validH
+    float tolV = atr[pivRight] * tolAtr
+    float minH = atr[pivRight] * minHeightAtr
+    int n = array.size(highIdx)
+    if n > 0
+        for j = n - 1 to 0
+            i1 = array.get(highIdx, j)
+            p1 = array.get(highPx, j)
+            b1 = array.get(highBot, j)
+            gapBars = hIdx - i1
+            if gapBars > maxGap
+                break
+            // đỉnh 2 không được vượt đỉnh 1 quá dung sai
+            if gapBars >= minBars and ph <= p1 + tolV
+                float hh = na
+                float ll = na
+                for k = (bar_index - hIdx) to (bar_index - i1)
+                    hh := na(hh) ? high[k] : math.max(hh, high[k])
+                    ll := na(ll) ? low[k] : math.min(ll, low[k])
+                // đỉnh 2 phải leo lại ít nhất minRetrace của nhịp từ neckline lên đỉnh 1
+                retraceOk = ph >= ll + minRetrace * (p1 - ll)
+                if retraceOk and (math.min(hBot, b1) - ll >= minH) and (hh <= math.max(ph, p1) + tolV)
+                    // không ghi đè setup SHORT đã gãy và đang chờ tín hiệu
+                    if not (bearArmed and bearBroken)
+                        bearArmed    := true
+                        bearBroken   := false
+                        bearBreakIdx := na
+                        bearLevel    := ll
+                        bearSL       := math.max(ph, p1)
+                        bearExp      := bar_index + maxBars
+                        if oppCancel
+                            bullArmed  := false
+                            bullBroken := false
+                        if showLabels
+                            label.new(hIdx, ph, "2 Đỉnh", style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=size.small)
+                        if showLines
+                            line.new(i1, p1, hIdx, ph, color=color.red, style=line.style_dashed)
+                        for k2 = pivRight - 1 to 0
+                            if bearArmed
+                                if close[k2] > bearSL
+                                    bearArmed  := false
+                                    bearBroken := false
+                                else if not bearBroken and close[k2] < bearLevel - breakBuf * atr
+                                    bearBroken   := true
+                                    bearBreakIdx := bar_index - k2
+                                    if showLabels
+                                        label.new(bar_index - k2, low[k2], "Gãy HT", style=label.style_label_up, color=color.new(color.maroon, 10), textcolor=color.white, size=size.tiny)
+                    break
+    array.push(highIdx, hIdx)
+    array.push(highPx, ph)
+    array.push(highBot, hBot)
+    if array.size(highIdx) > 20
+        array.shift(highIdx)
+        array.shift(highPx)
+        array.shift(highBot)
+
+// ===================== CẬP NHẬT GÃY / HỦY SETUP =====================
+if bullArmed
+    if close < bullSL
+        bullArmed  := false
+        bullBroken := false
+    else if bullBroken
+        if crossWin > 0 and bar_index - bullBreakIdx > crossWin
+            bullArmed  := false
+            bullBroken := false
+        else if cancelRetest and close < bullLevel
+            bullArmed  := false
+            bullBroken := false
+    else
+        if bar_index > bullExp
+            bullArmed := false
+        else if close > bullLevel + breakBuf * atr
+            bullBroken   := true
+            bullBreakIdx := bar_index
+            if showLabels
+                label.new(bar_index, high, "Gãy KC", style=label.style_label_down, color=color.new(color.teal, 10), textcolor=color.white, size=size.tiny)
+
+if bearArmed
+    if close > bearSL
+        bearArmed  := false
+        bearBroken := false
+    else if bearBroken
+        if crossWin > 0 and bar_index - bearBreakIdx > crossWin
+            bearArmed  := false
+            bearBroken := false
+        else if cancelRetest and close > bearLevel
+            bearArmed  := false
+            bearBroken := false
+    else
+        if bar_index > bearExp
+            bearArmed := false
+        else if close < bearLevel - breakBuf * atr
+            bearBroken   := true
+            bearBreakIdx := bar_index
+            if showLabels
+                label.new(bar_index, low, "Gãy HT", style=label.style_label_up, color=color.new(color.maroon, 10), textcolor=color.white, size=size.tiny)
+
+// ===================== TÍN HIỆU =====================
+crossAfterUp = crossUp and bullArmed and bullBroken and bar_index > bullBreakIdx
+crossAfterDn = crossDn and bearArmed and bearBroken and bar_index > bearBreakIdx
+
+winUp = confirmWin == 0 or (not na(lastUpIdx) and bar_index - lastUpIdx <= confirmWin)
+winDn = confirmWin == 0 or (not na(lastDnIdx) and bar_index - lastDnIdx <= confirmWin)
+
+crossOkUp = not needCross or (not na(lastUpIdx) and lastUpIdx > bullBreakIdx and winUp)
+crossOkDn = not needCross or (not na(lastDnIdx) and lastDnIdx > bearBreakIdx and winDn)
+
+longSignal  = bullArmed and bullBroken and bar_index >= bullBreakIdx and emaF > emaS and spreadOkUp and scoreUp >= minScore and adxOk and crossOkUp
+shortSignal = bearArmed and bearBroken and bar_index >= bearBreakIdx and emaF < emaS and spreadOkDn and scoreDn >= minScore and adxOk and crossOkDn
+
+if longSignal
+    bullArmed  := false
+    bullBroken := false
+if shortSignal
+    bearArmed  := false
+    bearBroken := false
+
+// ===================== PLOTS =====================
+plot(emaF, "EMA nhanh", color=color.aqua, linewidth=2)
+plot(emaS, "EMA chậm", color=color.orange, linewidth=2)
+plot(bullArmed ? bullLevel : na, "Kháng cự (neckline 2 đáy)", color=color.green, style=plot.style_linebr)
+plot(bearArmed ? bearLevel : na, "Hỗ trợ (neckline 2 đỉnh)", color=color.red, style=plot.style_linebr)
+plotshape(crossAfterUp, "EMA cắt lên (sau gãy)", style=shape.circle, location=location.belowbar, color=color.new(color.green, 40), size=size.tiny)
+plotshape(crossAfterDn, "EMA cắt xuống (sau gãy)", style=shape.circle, location=location.abovebar, color=color.new(color.red, 40), size=size.tiny)
+plotshape(longSignal, "LONG", style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, text="LONG", size=size.small)
+plotshape(shortSignal, "SHORT", style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, text="SHORT", size=size.small)
+
+alertcondition(longSignal, "LONG signal", "2 đáy → gãy kháng cự → EMA20 > EMA50 có momentum")
+alertcondition(shortSignal, "SHORT signal", "2 đỉnh → gãy hỗ trợ → EMA20 < EMA50 có momentum")
