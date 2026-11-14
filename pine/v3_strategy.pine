@@ -1,12 +1,12 @@
 //@version=6
-// 2 Đáy/2 Đỉnh v3 — research build (hillclimb winrate)
+// 2 Đáy/2 Đỉnh v3 - research build (hillclimb winrate)
 // Thay đổi chính vs v1 (backtest Python BTC/ETH/XAU/EURUSD 1h, walk-forward):
 // 1) Strategy thật: SL mô hình (có ATR cap), TP theo R, BE sau 1R, trail
 // 2) Volume lúc gãy + HTF EMA bias + RSI mềm
 // 3) Pattern quality score
-// 4) Preset "Quality v3" — OOS WR ~67%, PF ~1.8, 4/4 thị trường dương
+// 4) Preset "Quality v3" - OOS WR ~67%, PF ~1.8, 4/4 thị trường dương
 // 5) oppCancel + cancelRetest + cooldown
-strategy("2 Đáy/2 Đỉnh v3 → Gãy → EMA Momentum", overlay=true,
+strategy("2 Đáy/2 Đỉnh v3 -> Gãy -> EMA Momentum", overlay=true,
      max_boxes_count=200, max_labels_count=300, max_lines_count=100, max_bars_back=500,
      initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=5,
      commission_type=strategy.commission.percent, commission_value=0.04,
@@ -32,7 +32,7 @@ atrLen     = input.int(14, "ATR length", minval=1, group=grpSw)
 grpCl      = "Cụm nến tạo đỉnh/đáy"
 clusterAtr = input.float(0.5, "Độ rộng cụm (x ATR)", minval=0.05, step=0.05, group=grpCl)
 minCluster = input.int(3, "Số nến tối thiểu trong cụm", minval=1, group=grpCl)
-spikeAtr   = input.float(1.0, "Spike hợp lệ ≥ N x ATR (0=tắt)", minval=0.0, step=0.1, group=grpCl)
+spikeAtr   = input.float(1.0, "Spike hợp lệ >= N x ATR (0=tắt)", minval=0.0, step=0.1, group=grpCl)
 
 grpDbl       = "2 đỉnh / 2 đáy"
 minRetraceIn = input.float(0.60, "Hồi tối thiểu cụm 2", minval=0.1, maxval=1.0, step=0.05, group=grpDbl)
@@ -47,14 +47,14 @@ minQualityIn = input.float(0.50, "Chất lượng mô hình tối thiểu (0-1)"
 grpBrk         = "Gãy neckline"
 breakBufIn     = input.float(0.25, "Buffer gãy (x ATR)", minval=0.0, step=0.05, group=grpBrk)
 cancelRetestIn = input.bool(true, "Hủy nếu đóng cửa quay lại sau neckline", group=grpBrk)
-crossWin       = input.int(0, "Chờ tín hiệu tối đa sau gãy (0=∞)", minval=0, group=grpBrk)
-useVolumeIn    = input.bool(true, "Bắt buộc volume ≥ SMA khi gãy", group=grpBrk)
-volMultIn      = input.float(1.20, "Volume ≥ N × SMA", minval=0.5, step=0.05, group=grpBrk)
+crossWin       = input.int(0, "Chờ tín hiệu tối đa sau gãy (0=inf)", minval=0, group=grpBrk)
+useVolumeIn    = input.bool(true, "Bắt buộc volume >= SMA khi gãy", group=grpBrk)
+volMultIn      = input.float(1.20, "Volume >= N x SMA", minval=0.5, step=0.05, group=grpBrk)
 volLen         = input.int(20, "Volume SMA length", minval=1, group=grpBrk)
 
 grpMom       = "Momentum / EMA"
 needCross    = input.bool(false, "Bắt buộc EMA cắt MỚI sau gãy", group=grpMom)
-confirmWin   = input.int(0, "Cửa sổ sau EMA cắt (0=∞)", minval=0, group=grpMom)
+confirmWin   = input.int(0, "Cửa sổ sau EMA cắt (0=inf)", minval=0, group=grpMom)
 spreadAtrIn  = input.float(0.35, "Khoảng cách EMA tối thiểu (x ATR)", minval=0.0, step=0.05, group=grpMom)
 slopeLen     = input.int(3, "Slope EMA nhanh: N nến", minval=1, group=grpMom)
 slopeAtr     = input.float(0.25, "Slope EMA tối thiểu (x ATR)", minval=0.0, step=0.05, group=grpMom)
@@ -80,8 +80,8 @@ tradeShort   = input.bool(true, "Cho phép SHORT", group=grpRisk)
 grpRsi       = "RSI filter"
 useRsiIn     = input.bool(true, "Bật lọc RSI", group=grpRsi)
 rsiLen       = input.int(14, "RSI length", minval=2, group=grpRsi)
-rsiLongMaxIn = input.float(72.0, "LONG: RSI ≤", minval=50, maxval=90, step=1, group=grpRsi)
-rsiShortMinIn= input.float(28.0, "SHORT: RSI ≥", minval=10, maxval=50, step=1, group=grpRsi)
+rsiLongMaxIn = input.float(72.0, "LONG: RSI <=", minval=50, maxval=90, step=1, group=grpRsi)
+rsiShortMinIn= input.float(28.0, "SHORT: RSI >=", minval=10, maxval=50, step=1, group=grpRsi)
 
 grpVis     = "Hiển thị"
 showBoxes  = input.bool(true, "Vẽ vùng cụm nến", group=grpVis)
@@ -149,11 +149,13 @@ adxOk   = adxMin <= 0 or adxV >= adxMin
 volOk   = not useVolume or volume >= volMult * volSma
 
 f_quality(float p1, float p2, float height, int gapBars, float atrV) =>
-    float symmetry = 1.0 - math.min(1.0, math.abs(p1 - p2) / (atrV + 1e-10))
+    float atrSafe = atrV + 0.0000000001
+    float symmetry = 1.0 - math.min(1.0, math.abs(p1 - p2) / atrSafe)
     float span = maxGap - minBars
-    float spacing = 1.0 - math.abs((gapBars - (minBars + span / 2.0)) / (span / 2.0 + 1e-10))
-    spacing := math.max(0.0, math.min(1.0, spacing))
-    float heightScore = math.max(0.0, math.min(1.0, height / (2.5 * atrV)))
+    float mid = minBars + span / 2.0
+    float spacingRaw = 1.0 - math.abs((gapBars - mid) / (span / 2.0 + 0.0000000001))
+    float spacing = math.max(0.0, math.min(1.0, spacingRaw))
+    float heightScore = math.max(0.0, math.min(1.0, height / (2.5 * atrSafe)))
     0.4 * symmetry + 0.3 * spacing + 0.3 * heightScore
 
 // ===================== STATE =====================
@@ -274,13 +276,13 @@ if not na(pl)
         spk = cnt < minCluster
         box.new(lIdx - li, zTop, lIdx + ri, pl, border_color=spk ? color.new(color.orange, 10) : color.new(color.green, 30), bgcolor=color.new(color.green, 85))
 
-// ---- 2 ĐÁY ----
+// ---- 2 DAY ----
 if validL
-    float tolV = atr[pivRight] * tolAtr
-    float minH = atr[pivRight] * minHeightAtr
-    int n = array.size(lowIdx)
-    if n > 0
-        for j = n - 1 to 0
+    tolV = atr[pivRight] * tolAtr
+    minH = atr[pivRight] * minHeightAtr
+    nLow = array.size(lowIdx)
+    if nLow > 0
+        for j = nLow - 1 to 0
             i1 = array.get(lowIdx, j)
             p1 = array.get(lowPx, j)
             t1 = array.get(lowTop, j)
@@ -288,29 +290,29 @@ if validL
             if gapBars > maxGap
                 break
             if gapBars >= minBars and pl >= p1 - tolV
-                float hh = na
-                float ll = na
+                hh = float(na)
+                ll = float(na)
                 for k = (bar_index - lIdx) to (bar_index - i1)
                     hh := na(hh) ? high[k] : math.max(hh, high[k])
                     ll := na(ll) ? low[k] : math.min(ll, low[k])
                 retraceOk = pl <= hh - minRetrace * (hh - p1)
-                float height = hh - math.max(lTop, t1)
-                if retraceOk and height >= minH and (ll >= math.min(pl, p1) - tolV)
-                    float q = f_quality(p1, pl, height, gapBars, atr[pivRight])
-                    if q >= minQuality and not (bullArmed and bullBroken)
+                heightL = hh - math.max(lTop, t1)
+                if retraceOk and heightL >= minH and (ll >= math.min(pl, p1) - tolV)
+                    qL = f_quality(p1, pl, heightL, gapBars, atr[pivRight])
+                    if qL >= minQuality and not (bullArmed and bullBroken)
                         bullArmed    := true
                         bullBroken   := false
                         bullBreakIdx := na
                         bullLevel    := hh
                         bullSL       := math.min(pl, p1)
-                        bullHeight   := height
-                        bullQuality  := q
+                        bullHeight   := heightL
+                        bullQuality  := qL
                         bullExp      := bar_index + maxBars
                         if oppCancel
                             bearArmed  := false
                             bearBroken := false
                         if showLabels
-                            label.new(lIdx, pl, "2 Đáy Q=" + str.tostring(q, "#.##"), style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=size.small)
+                            label.new(lIdx, pl, "2 Day Q=" + str.tostring(qL, "#.##"), style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=size.small)
                         if showLines
                             line.new(i1, p1, lIdx, pl, color=color.green, style=line.style_dashed)
                         for k2 = pivRight - 1 to 0
@@ -332,43 +334,43 @@ if validL
         array.shift(lowPx)
         array.shift(lowTop)
 
-// ---- 2 ĐỈNH ----
+// ---- 2 DINH ----
 if validH
-    float tolV = atr[pivRight] * tolAtr
-    float minH = atr[pivRight] * minHeightAtr
-    int n = array.size(highIdx)
-    if n > 0
-        for j = n - 1 to 0
+    tolVH = atr[pivRight] * tolAtr
+    minHH = atr[pivRight] * minHeightAtr
+    nHigh = array.size(highIdx)
+    if nHigh > 0
+        for j = nHigh - 1 to 0
             i1 = array.get(highIdx, j)
             p1 = array.get(highPx, j)
             b1 = array.get(highBot, j)
             gapBars = hIdx - i1
             if gapBars > maxGap
                 break
-            if gapBars >= minBars and ph <= p1 + tolV
-                float hh = na
-                float ll = na
+            if gapBars >= minBars and ph <= p1 + tolVH
+                hhH = float(na)
+                llH = float(na)
                 for k = (bar_index - hIdx) to (bar_index - i1)
-                    hh := na(hh) ? high[k] : math.max(hh, high[k])
-                    ll := na(ll) ? low[k] : math.min(ll, low[k])
-                retraceOk = ph >= ll + minRetrace * (p1 - ll)
-                float height = math.min(hBot, b1) - ll
-                if retraceOk and height >= minH and (hh <= math.max(ph, p1) + tolV)
-                    float q = f_quality(p1, ph, height, gapBars, atr[pivRight])
-                    if q >= minQuality and not (bearArmed and bearBroken)
+                    hhH := na(hhH) ? high[k] : math.max(hhH, high[k])
+                    llH := na(llH) ? low[k] : math.min(llH, low[k])
+                retraceOk = ph >= llH + minRetrace * (p1 - llH)
+                heightH = math.min(hBot, b1) - llH
+                if retraceOk and heightH >= minHH and (hhH <= math.max(ph, p1) + tolVH)
+                    qH = f_quality(p1, ph, heightH, gapBars, atr[pivRight])
+                    if qH >= minQuality and not (bearArmed and bearBroken)
                         bearArmed    := true
                         bearBroken   := false
                         bearBreakIdx := na
-                        bearLevel    := ll
+                        bearLevel    := llH
                         bearSL       := math.max(ph, p1)
-                        bearHeight   := height
-                        bearQuality  := q
+                        bearHeight   := heightH
+                        bearQuality  := qH
                         bearExp      := bar_index + maxBars
                         if oppCancel
                             bullArmed  := false
                             bullBroken := false
                         if showLabels
-                            label.new(hIdx, ph, "2 Đỉnh Q=" + str.tostring(q, "#.##"), style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=size.small)
+                            label.new(hIdx, ph, "2 Dinh Q=" + str.tostring(qH, "#.##"), style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=size.small)
                         if showLines
                             line.new(i1, p1, hIdx, ph, color=color.red, style=line.style_dashed)
                         for k2 = pivRight - 1 to 0
@@ -454,63 +456,63 @@ if strategy.position_size == 0
     entryRisk := na
 
 if longSignal and strategy.position_size == 0
-    float rawStop = bullSL
-    float capped = atrStopCap > 0 ? math.max(rawStop, close - atrStopCap * atr) : rawStop
-    float risk = close - capped
-    if risk > 0
-        float tp = close + rrTarget * risk
+    rawStopL = bullSL
+    cappedL = atrStopCap > 0 ? math.max(rawStopL, close - atrStopCap * atr) : rawStopL
+    riskL = close - cappedL
+    if riskL > 0
+        tpL = close + rrTarget * riskL
         strategy.entry("LONG", strategy.long)
-        strategy.exit("L-Exit", from_entry="LONG", stop=capped, limit=tp)
+        strategy.exit("L-Exit", from_entry="LONG", stop=cappedL, limit=tpL)
         bullArmed  := false
         bullBroken := false
         trailOn := false
         beMoved := false
-        trailStop := capped
-        entryStop := capped
-        entryRisk := risk
+        trailStop := cappedL
+        entryStop := cappedL
+        entryRisk := riskL
 
 if shortSignal and strategy.position_size == 0
-    float rawStop = bearSL
-    float capped = atrStopCap > 0 ? math.min(rawStop, close + atrStopCap * atr) : rawStop
-    float risk = capped - close
-    if risk > 0
-        float tp = close - rrTarget * risk
+    rawStopS = bearSL
+    cappedS = atrStopCap > 0 ? math.min(rawStopS, close + atrStopCap * atr) : rawStopS
+    riskS = cappedS - close
+    if riskS > 0
+        tpS = close - rrTarget * riskS
         strategy.entry("SHORT", strategy.short)
-        strategy.exit("S-Exit", from_entry="SHORT", stop=capped, limit=tp)
+        strategy.exit("S-Exit", from_entry="SHORT", stop=cappedS, limit=tpS)
         bearArmed  := false
         bearBroken := false
         trailOn := false
         beMoved := false
-        trailStop := capped
-        entryStop := capped
-        entryRisk := risk
+        trailStop := cappedS
+        entryStop := cappedS
+        entryRisk := riskS
 
 // BE after 1R + trail
 if strategy.position_size > 0 and not na(entryRisk)
-    float entry = strategy.position_avg_price
-    if tp1Be and not beMoved and high - entry >= entryRisk
+    entryL = strategy.position_avg_price
+    if tp1Be and not beMoved and high - entryL >= entryRisk
         beMoved := true
-        trailStop := math.max(nz(trailStop, entry), entry)
-        strategy.exit("L-Exit", from_entry="LONG", stop=trailStop, limit=entry + rrTarget * entryRisk)
-    if useTrail and (high - entry >= entryRisk)
+        trailStop := math.max(nz(trailStop, entryL), entryL)
+        strategy.exit("L-Exit", from_entry="LONG", stop=trailStop, limit=entryL + rrTarget * entryRisk)
+    if useTrail and (high - entryL >= entryRisk)
         trailOn := true
     if trailOn
-        float newTrail = close - trailAtrMul * atr
-        trailStop := math.max(nz(trailStop, newTrail), newTrail)
-        strategy.exit("L-Exit", from_entry="LONG", stop=trailStop, limit=entry + rrTarget * entryRisk)
+        newTrailL = close - trailAtrMul * atr
+        trailStop := math.max(nz(trailStop, newTrailL), newTrailL)
+        strategy.exit("L-Exit", from_entry="LONG", stop=trailStop, limit=entryL + rrTarget * entryRisk)
 
 if strategy.position_size < 0 and not na(entryRisk)
-    float entry = strategy.position_avg_price
-    if tp1Be and not beMoved and entry - low >= entryRisk
+    entryS = strategy.position_avg_price
+    if tp1Be and not beMoved and entryS - low >= entryRisk
         beMoved := true
-        trailStop := math.min(nz(trailStop, entry), entry)
-        strategy.exit("S-Exit", from_entry="SHORT", stop=trailStop, limit=entry - rrTarget * entryRisk)
-    if useTrail and (entry - low >= entryRisk)
+        trailStop := math.min(nz(trailStop, entryS), entryS)
+        strategy.exit("S-Exit", from_entry="SHORT", stop=trailStop, limit=entryS - rrTarget * entryRisk)
+    if useTrail and (entryS - low >= entryRisk)
         trailOn := true
     if trailOn
-        float newTrail = close + trailAtrMul * atr
-        trailStop := math.min(nz(trailStop, newTrail), newTrail)
-        strategy.exit("S-Exit", from_entry="SHORT", stop=trailStop, limit=entry - rrTarget * entryRisk)
+        newTrailS = close + trailAtrMul * atr
+        trailStop := math.min(nz(trailStop, newTrailS), newTrailS)
+        strategy.exit("S-Exit", from_entry="SHORT", stop=trailStop, limit=entryS - rrTarget * entryRisk)
 
 if strategy.position_size == 0 and strategy.position_size[1] != 0
     lastExitBar := bar_index
@@ -523,17 +525,17 @@ plot(bearArmed ? bearLevel : na, "Neckline 2 đỉnh", color=color.red, style=pl
 plotshape(longSignal, "LONG", style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, text="LONG", size=size.small)
 plotshape(shortSignal, "SHORT", style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, text="SHORT", size=size.small)
 
-alertcondition(longSignal, "LONG v2", "2 đáy v2 → gãy + volume/HTF/momentum")
-alertcondition(shortSignal, "SHORT v2", "2 đỉnh v2 → gãy + volume/HTF/momentum")
+alertcondition(longSignal, "LONG v2", "2 đáy v2 -> gãy + volume/HTF/momentum")
+alertcondition(shortSignal, "SHORT v2", "2 đỉnh v2 -> gãy + volume/HTF/momentum")
 
 if showTable and barstate.islast
     var table t = table.new(position.top_right, 2, 10, bgcolor=color.new(color.black, 70), border_width=1)
     table.cell(t, 0, 0, "Preset", text_color=color.white)
     table.cell(t, 1, 0, preset, text_color=color.yellow)
     table.cell(t, 0, 1, "Bull setup", text_color=color.white)
-    table.cell(t, 1, 1, bullArmed ? (bullBroken ? "BROKEN" : "ARMED") : "—", text_color=bullArmed ? color.lime : color.gray)
+    table.cell(t, 1, 1, bullArmed ? (bullBroken ? "BROKEN" : "ARMED") : "-", text_color=bullArmed ? color.lime : color.gray)
     table.cell(t, 0, 2, "Bear setup", text_color=color.white)
-    table.cell(t, 1, 2, bearArmed ? (bearBroken ? "BROKEN" : "ARMED") : "—", text_color=bearArmed ? color.red : color.gray)
+    table.cell(t, 1, 2, bearArmed ? (bearBroken ? "BROKEN" : "ARMED") : "-", text_color=bearArmed ? color.red : color.gray)
     table.cell(t, 0, 3, "ADX", text_color=color.white)
     table.cell(t, 1, 3, str.tostring(adxV, "#.#"), text_color=adxOk ? color.lime : color.orange)
     table.cell(t, 0, 4, "Spread/ATR", text_color=color.white)
@@ -541,7 +543,7 @@ if showTable and barstate.islast
     table.cell(t, 0, 5, "HTF", text_color=color.white)
     table.cell(t, 1, 5, htfBull ? "BULL" : htfBear ? "BEAR" : "FLAT", text_color=htfBull ? color.lime : color.red)
     table.cell(t, 0, 6, "Vol / RSI", text_color=color.white)
-    table.cell(t, 1, 6, (volOk ? "V✓" : "V✗") + " " + str.tostring(rsiV, "#.#"), text_color=volOk ? color.lime : color.orange)
+    table.cell(t, 1, 6, (volOk ? "VY" : "VN") + " " + str.tostring(rsiV, "#.#"), text_color=volOk ? color.lime : color.orange)
     table.cell(t, 0, 7, "Q bull/bear", text_color=color.white)
     table.cell(t, 1, 7, str.tostring(nz(bullQuality, 0), "#.##") + " / " + str.tostring(nz(bearQuality, 0), "#.##"), text_color=color.white)
     table.cell(t, 0, 8, "StopCap/RR", text_color=color.white)
